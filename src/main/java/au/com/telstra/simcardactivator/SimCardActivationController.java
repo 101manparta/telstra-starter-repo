@@ -66,7 +66,7 @@ public class SimCardActivationController {
             QueryResponse response = new QueryResponse();
             response.setIccid(simCard.getIccid());
             response.setCustomerEmail(simCard.getCustomerEmail());
-            response.setActive(simCard.isActive());
+            response.setActive(simCard.getActive());
             
             System.out.println("Found: " + simCard);
             return ResponseEntity.ok(response);
@@ -120,3 +120,4 @@ public class SimCardActivationController {
         public void setActive(boolean active) { this.active = active; }
     }
 }
+
