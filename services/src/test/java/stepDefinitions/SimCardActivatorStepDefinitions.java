@@ -62,25 +62,21 @@ public class SimCardActivatorStepDefinitions {
     @Given("I have a valid SIM card with ICCID {string}")
     public void i_have_a_valid_sim_card_with_iccid(String iccid) {
         this.iccid = iccid;
-        System.out.println("Using valid ICCID: " + iccid);
     }
     
     @Given("I have an invalid SIM card with ICCID {string}")
     public void i_have_an_invalid_sim_card_with_iccid(String iccid) {
         this.iccid = iccid;
-        System.out.println("Using invalid ICCID: " + iccid);
     }
     
     @Given("I have customer email {string}")
     public void i_have_customer_email(String email) {
         this.customerEmail = email;
-        System.out.println("Using email: " + email);
     }
     
     @When("I submit an activation request")
     public void i_submit_an_activation_request() {
         activationCounter++;
-        System.out.println("Activation attempt #" + activationCounter);
         
         String url = "http://localhost:" + port + "/api/activate";
         ActivationRequest request = new ActivationRequest(iccid, customerEmail);
@@ -98,14 +94,12 @@ public class SimCardActivatorStepDefinitions {
     public void the_activation_should_be_successful() {
         assertEquals(HttpStatus.OK, activationResponse.getStatusCode());
         assertTrue(activationResponse.getBody().contains("successfully"));
-        System.out.println("? Activation successful as expected");
     }
     
     @Then("the activation should fail")
     public void the_activation_should_fail() {
         assertEquals(HttpStatus.BAD_REQUEST, activationResponse.getStatusCode());
         assertTrue(activationResponse.getBody().contains("failed"));
-        System.out.println("? Activation failed as expected");
     }
     
     @And("the database should show the SIM card as active")
@@ -120,7 +114,6 @@ public class SimCardActivatorStepDefinitions {
     
     private void verifyDatabaseRecord(boolean expectedActive) {
         int expectedId = activationCounter;
-        System.out.println("Verifying database record with ID: " + expectedId);
         
         String url = "http://localhost:" + port + "/api/query?simCardId=" + expectedId;
         queryResponse = restTemplate.getForEntity(url, QueryResponse.class);
@@ -133,7 +126,7 @@ public class SimCardActivatorStepDefinitions {
         assertEquals(customerEmail, response.getCustomerEmail());
         assertEquals(expectedActive, response.isActive());
         
-        System.out.println("? Database verification passed - ID: " + expectedId + 
+        System.out.println("Database verification - ID: " + expectedId + 
                           ", ICCID: " + response.getIccid() + 
                           ", Active: " + response.isActive());
     }
