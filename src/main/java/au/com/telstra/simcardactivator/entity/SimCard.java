@@ -8,33 +8,32 @@ import java.time.LocalDateTime;
 public class SimCard {
     
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
+    @Column(nullable = false)
     private String iccid;
     
-    @Column(name = "customer_email")
+    @Column(name = "customer_email", nullable = false)
     private String customerEmail;
     
-    private Boolean active;
+    @Column(name = "active", nullable = false)
+    private boolean active;
     
     @Column(name = "activation_time")
     private LocalDateTime activationTime;
     
-    // Default constructor
     public SimCard() {
         this.activationTime = LocalDateTime.now();
     }
     
-    // Constructor with parameters
-    public SimCard(String iccid, String customerEmail, Boolean active) {
+    public SimCard(String iccid, String customerEmail, boolean active) {
         this();
         this.iccid = iccid;
         this.customerEmail = customerEmail;
         this.active = active;
     }
     
-    // Getters and setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     
@@ -44,8 +43,8 @@ public class SimCard {
     public String getCustomerEmail() { return customerEmail; }
     public void setCustomerEmail(String customerEmail) { this.customerEmail = customerEmail; }
     
-    public Boolean getActive() { return active; }
-    public void setActive(Boolean active) { this.active = active; }
+    public boolean isActive() { return active; }
+    public void setActive(boolean active) { this.active = active; }
     
     public LocalDateTime getActivationTime() { return activationTime; }
     public void setActivationTime(LocalDateTime activationTime) { this.activationTime = activationTime; }

@@ -1,123 +1,102 @@
 package au.com.telstra.simcardactivator;
 
-import au.com.telstra.simcardactivator.entity.SimCard;
-import au.com.telstra.simcardactivator.repository.SimCardRepository;
-import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
+import au.com.telstra.simcardactivator.dto.SimCardRequest;
+import au.com.telstra.simcardactivator.entity.SimCard;
+import au.com.telstra.simcardactivator.repository.SimCardRepository;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.util.Optional;
 
 @RestController
 @RequestMapping("/api")
 public class SimCardActivationController {
-    
-    private final RestTemplate restTemplate;
+
     private final SimCardRepository simCardRepository;
-    
-    public SimCardActivationController(RestTemplate restTemplate, SimCardRepository simCardRepository) {
-        this.restTemplate = restTemplate;
+    private final RestTemplate restTemplate;
+    private static final String ACTIVATOR_URL = "http://localhost:8081/activate";
+
+    @Autowired
+    public SimCardActivationController(SimCardRepository simCardRepository) {
         this.simCardRepository = simCardRepository;
+        this.restTemplate = new RestTemplate();
     }
-    
+
     @PostMapping("/activate")
-    public ResponseEntity<String> activateSimCard(@RequestBody ActivationRequest request) {
-        System.out.println("=== ACTIVATION REQUEST RECEIVED ===");
-        System.out.println("ICCID: " + request.getIccid());
-        System.out.println("Email: " + request.getCustomerEmail());
-        
+    public ResponseEntity<String> activateSimCard(@RequestBody SimCardRequest request) {
         try {
-            String actuatorUrl = "http://localhost:8444/actuate";
-            ActuatorRequest actuatorRequest = new ActuatorRequest(request.getIccid());
-            
-            System.out.println("Calling actuator at: " + actuatorUrl);
-            ActuatorResponse actuatorResponse = restTemplate.postForObject(actuatorUrl, actuatorRequest, ActuatorResponse.class);
-            
-            System.out.println("Actuator response: " + actuatorResponse);
-            
-            boolean activationSuccess = actuatorResponse != null && actuatorResponse.isSuccess();
-            
-            SimCard simCard = new SimCard(request.getIccid(), request.getCustomerEmail(), activationSuccess);
-            SimCard savedSimCard = simCardRepository.save(simCard);
-            System.out.println("Saved to database! ID: " + savedSimCard.getId());
-            
-            if (activationSuccess) {
-                String successMessage = "SIM card activated successfully! Database ID: " + savedSimCard.getId();
-                return ResponseEntity.ok(successMessage);
-            } else {
-                return ResponseEntity.badRequest().body("SIM card activation failed");
+            // Send activation request to external service
+            ResponseEntity<ActivationResult> response = restTemplate.postForEntity(
+                ACTIVATOR_URL,
+                request,
+                ActivationResult.class
+            );
+
+            ActivationResult result = response.getBody();
+            if (result == null) {
+                // Save failed attempt to database
+                SimCard simCard = new SimCard(
+                    request.getIccid(),
+                    request.getCustomerEmail(),
+                    false
+                );
+                simCardRepository.save(simCard);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Activation service returned empty response");
             }
             
+            boolean success = result.isSuccess();
+            
+            // Save to database
+            SimCard simCard = new SimCard(
+                request.getIccid(),
+                request.getCustomerEmail(),
+                success
+            );
+            simCardRepository.save(simCard);
+
+            HttpStatus status = success ? HttpStatus.OK : HttpStatus.INTERNAL_SERVER_ERROR;
+            String message = success ? "SIM card activated successfully!" : "SIM card activation failed!";
+            
+            return ResponseEntity.status(status).body(message);
+            
         } catch (Exception e) {
-            System.err.println("Error: " + e.getMessage());
-            e.printStackTrace();
-            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Error: " + e.getMessage());
         }
     }
-    
+
     @GetMapping("/query")
-    public ResponseEntity<?> querySimCard(@RequestParam("simCardId") Long simCardId) {
-        System.out.println("=== QUERY REQUEST ===");
-        System.out.println("Requested ID: " + simCardId);
-        
+    public ResponseEntity<SimCard> querySimCard(@RequestParam Long simCardId) {
         Optional<SimCard> simCardOptional = simCardRepository.findById(simCardId);
         
-        if (simCardOptional.isPresent()) {
-            SimCard simCard = simCardOptional.get();
-            QueryResponse response = new QueryResponse();
-            response.setIccid(simCard.getIccid());
-            response.setCustomerEmail(simCard.getCustomerEmail());
-            response.setActive(simCard.getActive());
-            
-            System.out.println("Found: " + simCard);
-            return ResponseEntity.ok(response);
-        } else {
-            System.out.println("Not found for ID: " + simCardId);
-            return ResponseEntity.notFound().build();
+        return simCardOptional
+            .map(ResponseEntity::ok)
+            .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).body(null));
+    }
+
+    @GetMapping("/queryByIccid")
+    public ResponseEntity<SimCard> querySimCardByIccid(@RequestParam String iccid) {
+        Optional<SimCard> simCardOptional = simCardRepository.findByIccid(iccid);
+        
+        return simCardOptional
+            .map(ResponseEntity::ok)
+            .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).body(null));
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    static class ActivationResult {
+        private boolean success;
+
+        public boolean isSuccess() {
+            return success;
+        }
+
+        public void setSuccess(boolean success) {
+            this.success = success;
         }
     }
-    
-    public static class ActivationRequest {
-        private String iccid;
-        private String customerEmail;
-        
-        public String getIccid() { return iccid; }
-        public void setIccid(String iccid) { this.iccid = iccid; }
-        
-        public String getCustomerEmail() { return customerEmail; }
-        public void setCustomerEmail(String customerEmail) { this.customerEmail = customerEmail; }
-    }
-    
-    public static class ActuatorRequest {
-        private String iccid;
-        
-        public ActuatorRequest(String iccid) { this.iccid = iccid; }
-        public String getIccid() { return iccid; }
-        public void setIccid(String iccid) { this.iccid = iccid; }
-    }
-    
-    public static class ActuatorResponse {
-        private boolean success;
-        
-        public boolean isSuccess() { return success; }
-        public void setSuccess(boolean success) { this.success = success; }
-        
-        @Override
-        public String toString() { return "ActuatorResponse{success=" + success + "}"; }
-    }
-    
-    public static class QueryResponse {
-        private String iccid;
-        private String customerEmail;
-        private boolean active;
-        
-        public String getIccid() { return iccid; }
-        public void setIccid(String iccid) { this.iccid = iccid; }
-        
-        public String getCustomerEmail() { return customerEmail; }
-        public void setCustomerEmail(String customerEmail) { this.customerEmail = customerEmail; }
-        
-        public boolean isActive() { return active; }
-        public void setActive(boolean active) { this.active = active; }
-    }
 }
-
